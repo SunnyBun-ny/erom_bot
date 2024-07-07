@@ -1,48 +1,58 @@
 require('dotenv').config();
-const { Client, IntentsBitField } = require('discord.js');
-const { getRandomMessage, delay } = require('./helpers.js');
-const listOfWelcomeMessages = require('./data/listOfWelcomeMessages.js');
-const listOfLeaveMessages = require('./data/listOfLeaveMessages.js');
-const {testLeaveMessage, testWelcomeMessage} = require('./test/testMemberGreetings.js');
-const connectToMongo = require('./db.js');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
+const passport = require('passport');
+const discordStrategy = require('./strategies/discordStrategy.js');
 
-connectToMongo();
+const port = process.env.PORT || 3000;
 
+// Connect to Database
+const mongoDbClient = require('./databases/db.js');
 
-// const client = new Client({
-//     intents: [
-//         IntentsBitField.Flags.Guilds,
-//         IntentsBitField.Flags.GuildMembers,
-//         IntentsBitField.Flags.GuildMessages
-//     ]
-// });
+// Initialize express app
+const express = require('express');
+const app = express();
 
-// client.on('ready', async (c) => {
-//     console.log('The bot is ready!');
+// Setup Middleware
+const cors = require('cors');
+const bodyParser = require('body-parser');
+app.use(cors());
+app.use(bodyParser.json());
 
-//     // testWelcomeMessage(client);
-//     // await delay(5000);
-//     // testLeaveMessage(client);
+// Ensure MongoDB connection before starting the server
+mongoDbClient.then((mongooseConnection) => {
+    console.log('Connected to MongoDB');
 
-// });
+    // Setup Session
+    app.use(session({
+        secret: process.env.SESSION_SECRET || 'Erom Bot Secret',
+        cookie: {
+            maxAge: 60000 * 60 * 24,
+        },
+        resave: false,
+        saveUninitialized: false,
+        store: MongoStore.create({
+            mongoUrl: process.env.MONGODB_URI // Use mongoUrl for connection string
+        })
+    }));
 
-// client.on('guildMemberAdd', member => {
-//     const channel = member.guild.channels.cache.get(process.env.WELCOME_CHANNEL_ID);
-//     if (!channel) return;
-//     var message = getRandomMessage({ list: listOfWelcomeMessages, mention: member.id, server: member.guild.name });
-//     channel.send(message);
-// });
+    // Setup Middleware for Passport
+    app.use(passport.initialize());
+    app.use(passport.session());
 
-// client.on('guildMemberRemove', member => {
-//     const channel = member.guild.channels.cache.get(process.env.LEAVE_CHANNEL_ID);
-//     if (!channel) return;
-//     var message = getRandomMessage({ list: listOfLeaveMessages, userTag: member.user.tag });
-//     channel.send(message);
-// })
+    // Hello World Route
+    app.use('/', require('./routes/hello'));
 
-// client.login(process.env.BOT_ACCESS_TOKEN);
+    // Middleware Route
+    const authRoute = require('./routes/auth.js');
+    app.use('/auth', authRoute);
 
+    // Dashboard Route
+    const dashboardRoute = require('./routes/dashboard.js');
+    app.use('/dashboard', dashboardRoute);
 
-
-
-
+    // Listen to port
+    app.listen(port, () => console.info(`App is listening at http://localhost:${port}`));
+}).catch((error) => {
+    console.error('MongoDB connection error:', error);
+});
