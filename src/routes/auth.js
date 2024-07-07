@@ -8,11 +8,14 @@ router.get('/redirect', passport.authenticate('discord', {
     successRedirect: '/dashboard'
 }));
 
-router.get('/logout', (req, res) => {
-    if (req.user) {
-        req.logout();
-        res.redirect('/');
-    }
-    else res.redirect('/');
+// Your route for logging out
+router.get('/logout', function(req, res, next) {
+    req.logout(function(err) {
+        if (err) {
+            return next(err); // Passes the error to the next middleware
+        }
+        res.redirect('/'); // Redirects to the home page after successful logout
+    });
 });
+
 module.exports = router;
