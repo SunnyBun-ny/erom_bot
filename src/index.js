@@ -3,31 +3,54 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const passport = require('passport');
 const discordStrategy = require('./strategies/discordStrategy.js');
+const { logger, requestLogger } = require('./utils/logger.js');
+const bodyParser = require('body-parser');
+const Constants = require('./contants/contants.js');
+const express = require('express');
+const cors = require('cors');
 
 const port = process.env.PORT || 3000;
 
-// Connect to Database
-const mongoDbClient = require('./databases/db.js');
-
 // Initialize express app
-const express = require('express');
 const app = express();
 
-// Setup Middleware
-const cors = require('cors');
-const bodyParser = require('body-parser');
-app.use(cors());
+// Setup CORS
+const corsOptions = {
+    origin: ['http://localhost:3001'], // Adjust this to your frontend origin
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+};
+
+app.use(cors(corsOptions));
+
+// Explicitly handle preflight requests
+app.options('*', (req, res, next) => {
+    
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.sendStatus(204)
+});
+
+// Body parser middleware
 app.use(bodyParser.json());
 
-// Ensure MongoDB connection before starting the server
+// Log all incoming requests
+app.use(requestLogger);
+
+// Connect to Database and setup session once connected
+const mongoDbClient = require('./databases/db.js');
+
 mongoDbClient.then((mongooseConnection) => {
-    console.log('Connected to MongoDB');
+    logger.info('Connected to MongoDB');
 
     // Setup Session
     app.use(session({
         secret: process.env.SESSION_SECRET || 'Erom Bot Secret',
         cookie: {
-            maxAge: 60000 * 60 * 24,
+            maxAge: Constants.sessionTime,
         },
         resave: false,
         saveUninitialized: false,
@@ -36,23 +59,23 @@ mongoDbClient.then((mongooseConnection) => {
         })
     }));
 
-    // Setup Middleware for Passport
+    // Setup Passport middleware
     app.use(passport.initialize());
     app.use(passport.session());
 
-    // Hello World Route
+    // Routes
     app.use('/', require('./routes/hello'));
+    app.use('/auth', require('./routes/auth.js'));
+    app.use('/dashboard', require('./routes/dashboard.js'));
 
-    // Middleware Route
-    const authRoute = require('./routes/auth.js');
-    app.use('/auth', authRoute);
+    // Error handling middleware
+    app.use((err, req, res, next) => {
+        logger.error('Unexpected error', { error: err, requestId: req.requestId });
+        res.status(500).send('Something went wrong!');
+    });
 
-    // Dashboard Route
-    const dashboardRoute = require('./routes/dashboard.js');
-    app.use('/dashboard', dashboardRoute);
-
-    // Listen to port
-    app.listen(port, () => console.info(`App is listening at http://localhost:${port}`));
+    // Start server
+    app.listen(port, () => logger.info(`App is listening at http://localhost:${port}`));
 }).catch((error) => {
-    console.error('MongoDB connection error:', error);
+    logger.error('MongoDB connection error:', error);
 });

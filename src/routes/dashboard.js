@@ -1,9 +1,10 @@
 const router = require('express').Router();
 
-function isAuthorised(req, res, next) {
-    req.user ? next() : res.redirect('/');
-}
-router.use('/', isAuthorised, (req, res) => {
-    res.send(200);
-})
+router.get('/', (req, res) => {
+    if (req.isAuthenticated()) {
+      res.json(req.user);
+    } else {
+      res.status(401).json({ message: 'Unauthorized' });
+    }
+  });
 module.exports = router;

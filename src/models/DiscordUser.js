@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 
-
 const UserSchema = new mongoose.Schema({
     discordId: {
         type: String,
@@ -11,7 +10,14 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-
+    accessToken: {
+        type: String,
+        required: true
+    },
+    refreshToken: {
+        type: String,
+        required: true
+    }
 });
 
 const User = mongoose.model('User', UserSchema);
